@@ -15,14 +15,23 @@
 package svgdata
 
 import (
-	"encoding/xml"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-const (
-	SvgNs = "http://www.w3.org/2000/svg"
-)
+func TestLoadSaveCircle(t *testing.T) {
+	assert := assert.New(t)
 
-type Node interface {
-	xml.Unmarshaler
-	xml.Marshaler
+	data0 := []byte(`<svg xmlns="http://www.w3.org/2000/svg"><circle cx="3px" cy="4in" r="20" ></circle></svg>`)
+	r0, err := Unmarshal(data0)
+	assert.NoError(err)
+
+	data1, err := Marshal(r0)
+	assert.NoError(err)
+
+	r1, err := Unmarshal(data1)
+	assert.NoError(err)
+
+	assert.Equal(r0, r1)
 }

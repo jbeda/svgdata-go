@@ -15,92 +15,110 @@
 package svgdata
 
 import (
-	"container/list"
-
-	"github.com/jbeda/geom"
+	"encoding/xml"
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 )
 
 type Path struct {
-	segs   *list.List
-	Closed bool
+	Attrs    AttrMap
+	SubPaths []SubPath
 }
 
-func (me *Path) PushFront(seg PathSegment) {
-	if me.segs == nil {
-		me.segs = new(list.List)
-	}
-	me.segs.PushFront(seg)
+type SubPath struct {
+	Commands []PathCommand
 }
 
-func (me *Path) PushPathFront(path *Path) {
-	if me.segs == nil {
-		me.segs = new(list.List)
-	}
-	me.segs.PushFrontList(path.segs)
+type PathCommand struct {
+	Command byte
+	Params  []float64
 }
 
-func (me *Path) PushBack(seg PathSegment) {
-	if me.segs == nil {
-		me.segs = new(list.List)
-	}
-	me.segs.PushBack(seg)
+func init() {
+	unknownCreator = createPath
 }
 
-func (me *Path) PushPathBack(path *Path) {
-	if me.segs == nil {
-		me.segs = new(list.List)
-	}
-	me.segs.PushBackList(path.segs)
+func createPath() Node {
+	return &Path{}
 }
 
-func (me *Path) Reverse() {
-	newSegs := new(list.List)
-	for e := me.segs.Front(); e != nil; e = e.Next() {
-		e.Value.(PathSegment).Reverse()
-		newSegs.PushFront(e.Value)
+func (p *Path) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var err error
+
+	if start.Name.Space != SvgNs {
+		return fmt.Errorf("Parsing non-SVG element: %v", start.Name)
 	}
-	me.segs = newSegs
+	p.Attrs = makeAttrMap(start.Attr)
+	_, _, err = readChildren(d, &start)
+	return err
 }
 
-func (me *Path) Front() PathSegment {
-	if me.segs == nil || me.segs.Len() == 0 {
-		return nil
-	}
-	return me.segs.Front().Value.(PathSegment)
-}
+func (p *Path) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	se := MakeStartElement("path", p.Attrs)
 
-func (me *Path) FrontPoint() *geom.Coord {
-	s := me.Front()
-	if s != nil {
-		return s.P1()
+	err := e.EncodeToken(se)
+	if err != nil {
+		return err
 	}
+
+	err = e.EncodeToken(se.End())
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (me *Path) Back() PathSegment {
-	if me.segs == nil || me.segs.Len() == 0 {
-		return nil
-	}
-	return me.segs.Back().Value.(PathSegment)
+// Parse the path string. Each command represents a single instance of the
+// command. This is to enable easier further processing.
+func ParsePathString(d string) ([]SubPath, error) {
+	sp := []SubPath{}
+
+	d = skipWsp(d)
+
+	return sp, nil
 }
 
-func (me *Path) BackPoint() *geom.Coord {
-	s := me.Back()
-	if s != nil {
-		return s.P2()
-	}
-	return nil
+func skipWsp(d string) string {
+	return strings.TrimLeft(d, " \t\r\n")
 }
 
-func (me *Path) Draw(svg *SVGWriter, s ...string) {
-	startP := me.segs.Front().Value.(PathSegment).P1()
-	svg.StartPath(*startP, s...)
-	for e := me.segs.Front(); e != nil; e = e.Next() {
-		e.Value.(PathSegment).PathDraw(svg)
+func skipCommaWsp(d string) string {
+	d = skipWsp(d)
+	if len(d) > 0 && d[0] == ',' {
+		d = d[1:]
+	}
+	d = skipWsp(d)
+
+	return d
+}
+
+var floatRE *regexp.Regexp = regexp.MustCompile(`^[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?`)
+
+// readNumber reads the next number from the string.  It returns the rest of the
+// string, the parsed number and an ok bool.  If ok is false then there is no
+// number and d is returned.
+func readNumber(d string) (string, float64, bool) {
+	loc := valueRE.FindStringIndex(d)
+	if loc == nil {
+		return d, 0, false
 	}
 
-	if me.Closed {
-		svg.PathClose()
+	v, err := strconv.ParseFloat(d[loc[0]:loc[1]], 64)
+	if err != nil {
+		return d, 0, false
 	}
-	svg.EndPath()
+
+	return d[loc[1]:], v, true
+}
+
+// readByte reads the next byte from the string. It returns the remaining
+// string, the byte and an ok bool. If bool is false then the string is empty.
+func readByte(d string) (string, byte, bool) {
+	if len(d) == 0 {
+		return d, 0, false
+	}
+	return d[1:], d[0], true
 }

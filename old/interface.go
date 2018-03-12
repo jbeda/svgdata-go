@@ -15,14 +15,16 @@
 package svgdata
 
 import (
-	"encoding/xml"
+	"github.com/jbeda/geom"
 )
 
-const (
-	SvgNs = "http://www.w3.org/2000/svg"
-)
+type Element interface {
+	Draw(w *SVGWriter, s ...string)
+}
 
-type Node interface {
-	xml.Unmarshaler
-	xml.Marshaler
+type PathSegment interface {
+	P1() *geom.Coord
+	P2() *geom.Coord
+	Reverse()
+	PathDraw(w *SVGWriter)
 }

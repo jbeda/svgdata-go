@@ -17,70 +17,57 @@ package svgdata
 import (
 	"encoding/xml"
 	"fmt"
-
-	"github.com/jbeda/geom"
 )
 
 // Unknown is an SVG element that has no specialized code or representation.
-type Circle struct {
-	Attrs  AttrMap
-	Center geom.Coord
-	Radius float64
+type Unknown struct {
+	Name     string
+	Attrs    AttrMap
+	Children []Node
+	Text     string
 }
 
 func init() {
-	unknownCreator = createPath
+	unknownCreator = createUnknown
 }
 
-func createCircle() Node {
-	return &Circle{}
+func createUnknown() Node {
+	return &Unknown{}
 }
 
-func (c *Circle) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+func (u *Unknown) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	var err error
 
 	if start.Name.Space != SvgNs {
 		return fmt.Errorf("Parsing non-SVG element: %v", start.Name)
 	}
-
-	c.Attrs = makeAttrMap(start.Attr)
-
-	cx, err := parseValue(c.Attrs["cx"])
-	if err != nil {
-		return err
-	}
-	delete(c.Attrs, "cx")
-
-	cy, err := parseValue(c.Attrs["cy"])
-	if err != nil {
-		return err
-	}
-	delete(c.Attrs, "cy")
-
-	r, err := parseValue(c.Attrs["r"])
-	if err != nil {
-		return err
-	}
-	delete(c.Attrs, "r")
-
-	c.Center = geom.Coord{X: cx, Y: cy}
-	c.Radius = r
-
-	_, _, err = readChildren(d, &start)
+	u.Name = start.Name.Local
+	u.Attrs = makeAttrMap(start.Attr)
+	u.Children, u.Text, err = readChildren(d, &start)
 	return err
 }
 
-func (c *Circle) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	am := copyAttrMap(c.Attrs)
-	am["cx"] = floatToString(c.Center.X)
-	am["cy"] = floatToString(c.Center.Y)
-	am["r"] = floatToString(c.Radius)
-
-	se := MakeStartElement("path", am)
+func (u *Unknown) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	se := MakeStartElement(u.Name, u.Attrs)
 
 	err := e.EncodeToken(se)
 	if err != nil {
 		return err
+	}
+
+	if len(u.Children) != 0 {
+		for _, c := range u.Children {
+			err = e.Encode(c)
+			if err != nil {
+				return err
+			}
+		}
+	} else if u.Text != "" {
+		tt := xml.CharData(u.Text)
+		err = e.EncodeToken(tt)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = e.EncodeToken(se.End())

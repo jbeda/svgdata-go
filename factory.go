@@ -14,15 +14,26 @@
 
 package svgdata
 
-import (
-	"encoding/xml"
-)
+import "encoding/xml"
 
-const (
-	SvgNs = "http://www.w3.org/2000/svg"
-)
+type nodeCreator func() Node
 
-type Node interface {
-	xml.Unmarshaler
-	xml.Marshaler
+var factoryMap map[string]nodeCreator = map[string]nodeCreator{}
+var unknownCreator nodeCreator
+
+func CreateNodeFromName(n xml.Name) Node {
+	if n.Space != SvgNs {
+		return nil
+	}
+
+	creator, ok := factoryMap[n.Local]
+	if !ok {
+		creator = unknownCreator
+	}
+
+	return creator()
+}
+
+func RegisterNodeCreator(n string, c nodeCreator) {
+	factoryMap[n] = c
 }

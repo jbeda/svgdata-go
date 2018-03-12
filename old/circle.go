@@ -15,14 +15,14 @@
 package svgdata
 
 import (
-	"encoding/xml"
+	"github.com/jbeda/geom"
 )
 
-const (
-	SvgNs = "http://www.w3.org/2000/svg"
-)
+type Circle struct {
+	Center geom.Coord
+	Radius float64
+}
 
-type Node interface {
-	xml.Unmarshaler
-	xml.Marshaler
+func (me *Circle) Draw(svg *SVGWriter, s ...string) {
+	svg.Circle(me.Center, me.Radius, s...)
 }

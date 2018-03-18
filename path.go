@@ -15,11 +15,14 @@
 package svgdata
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 type Path struct {
@@ -28,16 +31,20 @@ type Path struct {
 }
 
 type SubPath struct {
-	Commands []PathCommand
+	Commands       []PathCommand
+	startX, startY float64 // The start of the path
+	endX, endY     float64 // The end of the path
 }
 
 type PathCommand struct {
-	Command byte
-	Params  []float64
+	Command        byte      // The single character command
+	Params         []float64 // The parameters to the command
+	startX, startY float64   // The start point
+	endX, endY     float64   // The point that the command ends on
 }
 
 func init() {
-	unknownCreator = createPath
+	RegisterNodeCreator("path", createPath)
 }
 
 func createPath() Node {
@@ -51,12 +58,22 @@ func (p *Path) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 		return fmt.Errorf("Parsing non-SVG element: %v", start.Name)
 	}
 	p.Attrs = makeAttrMap(start.Attr)
+
+	p.SubPaths, err = ParsePathString(p.Attrs["d"])
+	if err != nil {
+		return err
+	}
+	delete(p.Attrs, "d")
+
 	_, _, err = readChildren(d, &start)
 	return err
 }
 
 func (p *Path) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	se := MakeStartElement("path", p.Attrs)
+	am := copyAttrMap(p.Attrs)
+	am["d"] = SavePathString(p.SubPaths)
+
+	se := MakeStartElement("path", am)
 
 	err := e.EncodeToken(se)
 	if err != nil {
@@ -71,54 +88,248 @@ func (p *Path) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return nil
 }
 
-// Parse the path string. Each command represents a single instance of the
-// command. This is to enable easier further processing.
+var commandLengths map[byte]int = map[byte]int{
+	'm': 2, // move to
+	'M': 2,
+	'z': 0, // close path
+	'Z': 0,
+	'l': 2, // line to
+	'L': 2,
+	'h': 1, // hori line to
+	'H': 1,
+	'v': 1, // vert line to
+	'V': 1,
+	'c': 6, // cubic bezier curve to
+	'C': 6,
+	's': 4, // smooth cubic bezier curve to
+	'S': 4,
+	'q': 4, // quad bezier curve to
+	'Q': 4,
+	't': 2, // smooth quad bezier curve to
+	'T': 2,
+	'a': 7, // arc to
+	'A': 7,
+}
+
+func isEOD(t pathToken) bool {
+	_, ok := t.(eodToken)
+	return ok
+}
+
+type pathParser struct {
+	currX, currY float64
+	subPaths     []SubPath
+	currSubPath  *SubPath
+}
+
+// ParsePathString parses an SVG path string. Each command represents a single
+// instance of the command. This is to enable easier further processing.
 func ParsePathString(d string) ([]SubPath, error) {
-	sp := []SubPath{}
-
-	d = skipWsp(d)
-
-	return sp, nil
+	pp := pathParser{}
+	return pp.parse(d)
 }
 
-func skipWsp(d string) string {
-	return strings.TrimLeft(d, " \t\r\n")
-}
-
-func skipCommaWsp(d string) string {
-	d = skipWsp(d)
-	if len(d) > 0 && d[0] == ',' {
-		d = d[1:]
+func SavePathString(sps []SubPath) string {
+	var buf bytes.Buffer
+	for _, sp := range sps {
+		for i := 0; i < len(sp.Commands); i++ {
+			c := sp.Commands[i]
+			buf.WriteByte(c.Command)
+			for j, p := range c.Params {
+				buf.WriteString(strconv.FormatFloat(p, 'f', -1, 64))
+				if j != len(c.Params)-1 {
+					buf.WriteByte(' ')
+				}
+			}
+		}
 	}
-	d = skipWsp(d)
 
-	return d
+	return buf.String()
 }
+
+func (pp *pathParser) parse(d string) ([]SubPath, error) {
+	cmds, err := parsePathCommands(d)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, c := range cmds {
+		// If we see a start path or don't have a current subpath then we start a
+		// new subpath
+		if pp.currSubPath == nil || c.Command == 'm' || c.Command == 'M' {
+			pp.subPaths = append(pp.subPaths, SubPath{})
+			pp.currSubPath = &pp.subPaths[len(pp.subPaths)-1]
+
+			// If the current command isn't 'M' then we inject one
+			if c.Command != 'm' && c.Command != 'M' {
+				pp.currSubPath.Commands = append(pp.currSubPath.Commands,
+					PathCommand{Command: 'M', Params: []float64{pp.currX, pp.currY}})
+				pp.updatePositions(&pp.currSubPath.Commands[0])
+			}
+		}
+
+		pp.currSubPath.Commands = append(pp.currSubPath.Commands, c)
+		pp.updatePositions(&pp.currSubPath.Commands[len(pp.currSubPath.Commands)-1])
+
+		// If we see a Z then we close out the subpath
+		if c.Command == 'z' || c.Command == 'Z' {
+			pp.currSubPath = nil
+		}
+	}
+
+	return pp.subPaths, nil
+}
+
+// updatePositions updates any begin/end positions on the command and subpath
+// based on current context.
+func (pp *pathParser) updatePositions(c *PathCommand) {
+	c.startX, c.startY = pp.currX, pp.currY
+
+	switch c.Command {
+	case 'm':
+		pp.currX, pp.currY = (pp.currX + c.Params[0]), (pp.currY + c.Params[1])
+		pp.currSubPath.startX, pp.currSubPath.startY = pp.currX, pp.currY
+	case 'M':
+		pp.currX, pp.currY = c.Params[0], c.Params[1]
+		pp.currSubPath.startX, pp.currSubPath.startY = pp.currX, pp.currY
+	case 'z':
+		fallthrough
+	case 'Z':
+		pp.currX, pp.currY = pp.currSubPath.startX, pp.currSubPath.startY
+	case 'l':
+		pp.currX, pp.currY = (pp.currX + c.Params[0]), (pp.currY + c.Params[1])
+	case 'L':
+		pp.currX, pp.currY = c.Params[0], c.Params[1]
+	case 'h':
+		pp.currX = pp.currX + c.Params[0]
+	case 'H':
+		pp.currX = c.Params[0]
+	case 'v':
+		pp.currY = pp.currY + c.Params[0]
+	case 'V':
+		pp.currY = c.Params[0]
+	case 'c':
+		pp.currX, pp.currY = (pp.currX + c.Params[4]), (pp.currY + c.Params[5])
+	case 'C':
+		pp.currX, pp.currY = c.Params[4], c.Params[5]
+	case 's':
+		pp.currX, pp.currY = (pp.currX + c.Params[2]), (pp.currY + c.Params[3])
+	case 'S':
+		pp.currX, pp.currY = c.Params[2], c.Params[3]
+	case 'q':
+		pp.currX, pp.currY = (pp.currX + c.Params[2]), (pp.currY + c.Params[3])
+	case 'Q':
+		pp.currX, pp.currY = c.Params[2], c.Params[3]
+	case 't':
+		pp.currX, pp.currY = (pp.currX + c.Params[0]), (pp.currY + c.Params[1])
+	case 'T':
+		pp.currX, pp.currY = c.Params[0], c.Params[1]
+	case 'a':
+		pp.currX, pp.currY = (pp.currX + c.Params[5]), (pp.currY + c.Params[6])
+	case 'A':
+		pp.currX, pp.currY = c.Params[5], c.Params[6]
+	}
+
+	c.endX, c.endY = pp.currX, pp.currY
+	pp.currSubPath.endX, pp.currSubPath.endY = pp.currX, pp.currY
+}
+
+func parsePathCommands(d string) ([]PathCommand, error) {
+	r := []PathCommand{}
+
+	pts, err := pathTokenize(d)
+	if err != nil {
+		return nil, err
+	}
+
+	t, pts := pts[0], pts[1:]
+	var currentCommand byte = 'L'
+
+	// If we have a blank input then just exit now
+	if isEOD(t) {
+		return r, nil
+	}
+
+	for !isEOD(t) {
+		// See if this is a command token.  If so, then it becomes our current
+		// command.
+		ct, ok := t.(commandToken)
+		if ok {
+			currentCommand = ct.command
+			t, pts = pts[0], pts[1:]
+		}
+
+		c := PathCommand{Command: currentCommand}
+
+		commandLength := commandLengths[currentCommand]
+		if len(pts) < commandLength {
+			return nil, errors.Errorf("Path command (%c) doesn't have enough parameters (%d)", currentCommand, len(pts))
+		}
+
+		for i := 0; i < commandLength; i++ {
+			n, ok := t.(numberToken)
+			if !ok {
+				return nil, errors.Errorf("Path command (%c) doesn't have enough parameters", currentCommand)
+			}
+			c.Params = append(c.Params, n.number)
+			t, pts = pts[0], pts[1:]
+		}
+
+		r = append(r, c)
+
+		// Any extra parameters after M are the corresponding L
+		if currentCommand == 'm' {
+			currentCommand = 'l'
+		}
+		if currentCommand == 'M' {
+			currentCommand = 'L'
+		}
+	}
+
+	return r, nil
+}
+
+// Path tokenizer
+
+type pathToken interface{}
+type commandToken struct {
+	command byte
+}
+type numberToken struct {
+	number float64
+}
+type eodToken struct{}
 
 var floatRE *regexp.Regexp = regexp.MustCompile(`^[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?`)
 
-// readNumber reads the next number from the string.  It returns the rest of the
-// string, the parsed number and an ok bool.  If ok is false then there is no
-// number and d is returned.
-func readNumber(d string) (string, float64, bool) {
-	loc := valueRE.FindStringIndex(d)
-	if loc == nil {
-		return d, 0, false
-	}
+func pathTokenize(d string) ([]pathToken, error) {
+	var r []pathToken
+	for len(d) > 0 {
+		// Trim any whitespace and commas
+		d = strings.TrimLeft(d, " \t\r\n,")
+		if len(d) == 0 {
+			break
+		}
 
-	v, err := strconv.ParseFloat(d[loc[0]:loc[1]], 64)
-	if err != nil {
-		return d, 0, false
+		// Look for a float
+		loc := floatRE.FindStringIndex(d)
+		if loc != nil {
+			f, err := strconv.ParseFloat(d[loc[0]:loc[1]], 64)
+			if err != nil {
+				return nil, errors.WithStack(err)
+			}
+			d = d[loc[1]:]
+			r = append(r, numberToken{f})
+		} else {
+			// Assume it is a command
+			c := d[0]
+			if _, ok := commandLengths[c]; !ok {
+				return nil, errors.Errorf("Unknown command in path: %c", c)
+			}
+			d = d[1:]
+			r = append(r, commandToken{c})
+		}
 	}
-
-	return d[loc[1]:], v, true
-}
-
-// readByte reads the next byte from the string. It returns the remaining
-// string, the byte and an ok bool. If bool is false then the string is empty.
-func readByte(d string) (string, byte, bool) {
-	if len(d) == 0 {
-		return d, 0, false
-	}
-	return d[1:], d[0], true
+	r = append(r, eodToken{})
+	return r, nil
 }

@@ -21,62 +21,53 @@ import (
 	"github.com/jbeda/geom"
 )
 
-// Circle is an SVG element that has no specialized code or representation.
-type Circle struct {
+// Polyshape is an SVG element is a shape specified with a list of straight
+// lines.
+type Polyshape struct {
 	Attrs  AttrMap
-	Center geom.Coord
-	Radius float64
+	Points []geom.Coord
+	Closed bool
 }
 
 func init() {
-	RegisterNodeCreator("circle", createCircle)
+	RegisterNodeCreator("polygon", createPolygon)
+	RegisterNodeCreator("polyline", createPolyline)
 }
 
-func createCircle() Node {
-	return &Circle{}
+func createPolygon() Node {
+	return &Polyshape{Closed: true}
 }
 
-func (c *Circle) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+func createPolyline() Node {
+	return &Polyshape{Closed: false}
+}
+
+func (p *Polyshape) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	var err error
 
 	if start.Name.Space != SvgNs {
 		return fmt.Errorf("Parsing non-SVG element: %v", start.Name)
 	}
 
-	c.Attrs = makeAttrMap(start.Attr)
-
-	cx, err := parseValue(c.Attrs["cx"])
-	if err != nil {
-		return err
+	if start.Name.Local == "polygon" {
+		p.Closed = true
 	}
-	delete(c.Attrs, "cx")
 
-	cy, err := parseValue(c.Attrs["cy"])
-	if err != nil {
-		return err
-	}
-	delete(c.Attrs, "cy")
-
-	r, err := parseValue(c.Attrs["r"])
-	if err != nil {
-		return err
-	}
-	delete(c.Attrs, "r")
-
-	c.Center = geom.Coord{X: cx, Y: cy}
-	c.Radius = r
+	p.Attrs = makeAttrMap(start.Attr)
 
 	_, _, err = readChildren(d, &start)
 	return err
 }
 
-func (c *Circle) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	am := copyAttrMap(c.Attrs)
-	am["cx"] = floatToString(c.Center.X)
-	am["cy"] = floatToString(c.Center.Y)
-	am["r"] = floatToString(c.Radius)
+func (p *Polyshape) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	am := copyAttrMap(p.Attrs)
 
-	se := MakeStartElement("circle", am)
+	var se xml.StartElement
+	if p.Closed {
+		se = MakeStartElement("polygon", am)
+	} else {
+		se = MakeStartElement("polyline", am)
+	}
 
 	err := e.EncodeToken(se)
 	if err != nil {

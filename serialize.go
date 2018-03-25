@@ -110,8 +110,6 @@ func MakeStartElement(name string, am AttrMap) xml.StartElement {
 	}
 }
 
-type AttrMap map[string]string
-
 func makeAttrMap(attrs []xml.Attr) AttrMap {
 	r := make(AttrMap)
 

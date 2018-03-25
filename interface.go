@@ -22,6 +22,8 @@ const (
 	SvgNs = "http://www.w3.org/2000/svg"
 )
 
+type AttrMap map[string]string
+
 type Node interface {
 	xml.Unmarshaler
 	xml.Marshaler

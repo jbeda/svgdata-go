@@ -36,6 +36,10 @@ func createCircle() Node {
 	return &Circle{}
 }
 
+func NewCircle(c geom.Coord, r float64) *Circle {
+	return &Circle{Center: c, Radius: r}
+}
+
 func (c *Circle) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	var err error
 

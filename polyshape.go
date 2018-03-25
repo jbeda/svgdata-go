@@ -14,70 +14,43 @@
 
 package svgdata
 
-import (
-	"encoding/xml"
-	"fmt"
-
-	"github.com/jbeda/geom"
-)
+import "github.com/jbeda/geom"
 
 // Polyshape is an SVG element is a shape specified with a list of straight
 // lines.
 type Polyshape struct {
-	Attrs  AttrMap
+	nodeImpl
+
+	// TODO: Handle Points
 	Points []geom.Coord
-	Closed bool
 }
 
 func init() {
-	RegisterNodeCreator("polygon", createPolygon)
-	RegisterNodeCreator("polyline", createPolyline)
+	RegisterNodeCreator("polygon", CreatePolygon)
+	RegisterNodeCreator("polyline", CreatePolyline)
 }
 
-func createPolygon() Node {
-	return &Polyshape{Closed: true}
+func CreatePolygon() Node {
+	p := &Polyshape{}
+	p.nodeImpl.name = "polygon"
+	p.nodeImpl.onMarshalAttrs = p.marshalAttrs
+	p.nodeImpl.onUnmarshalAttrs = p.unmarshalAttrs
+
+	return p
 }
 
-func createPolyline() Node {
-	return &Polyshape{Closed: false}
+func CreatePolyline() Node {
+	p := &Polyshape{}
+	p.nodeImpl.name = "polygon"
+	p.nodeImpl.onMarshalAttrs = p.marshalAttrs
+	p.nodeImpl.onUnmarshalAttrs = p.unmarshalAttrs
+
+	return p
 }
 
-func (p *Polyshape) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	var err error
-
-	if start.Name.Space != SvgNs {
-		return fmt.Errorf("Parsing non-SVG element: %v", start.Name)
-	}
-
-	if start.Name.Local == "polygon" {
-		p.Closed = true
-	}
-
-	p.Attrs = makeAttrMap(start.Attr)
-
-	_, _, err = readChildren(d, &start)
-	return err
+func (p *Polyshape) marshalAttrs(am AttrMap) {
 }
 
-func (p *Polyshape) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	am := copyAttrMap(p.Attrs)
-
-	var se xml.StartElement
-	if p.Closed {
-		se = MakeStartElement("polygon", am)
-	} else {
-		se = MakeStartElement("polyline", am)
-	}
-
-	err := e.EncodeToken(se)
-	if err != nil {
-		return err
-	}
-
-	err = e.EncodeToken(se.End())
-	if err != nil {
-		return err
-	}
-
+func (p *Polyshape) unmarshalAttrs(am AttrMap) error {
 	return nil
 }

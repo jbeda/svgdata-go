@@ -30,7 +30,7 @@ func Unmarshal(data []byte) (*Root, error) {
 		return nil, err
 	}
 	if se == nil {
-		return nil, fmt.Errorf("No root element found")
+		return nil, fmt.Errorf("no root element found")
 	}
 
 	r := &Root{}
@@ -41,10 +41,12 @@ func Unmarshal(data []byte) (*Root, error) {
 	return r, nil
 }
 
-func Marshal(r *Root) ([]byte, error) {
+func Marshal(r *Root, pretty bool) ([]byte, error) {
 	var b bytes.Buffer
 	e := xml.NewEncoder(&b)
-	e.Indent("", "  ")
+	if pretty {
+		e.Indent("", "  ")
+	}
 
 	e.Encode(r)
 
@@ -69,7 +71,7 @@ func findNextStart(d *xml.Decoder, se *xml.StartElement) (*xml.StartElement, str
 			if se != nil && se.End() == tt {
 				return nil, chardata, nil
 			}
-			return nil, "", fmt.Errorf("Unexpected EndElement: %r", tt)
+			return nil, "", fmt.Errorf("unexpected EndElement: %r", tt)
 		case xml.CharData:
 			chardata += string(tt)
 		default:

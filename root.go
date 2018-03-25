@@ -14,68 +14,30 @@
 
 package svgdata
 
-import (
-	"encoding/xml"
-	"fmt"
-
-	"github.com/jbeda/geom"
-)
-
 // Root represents the root <svg> element.
 type Root struct {
-	Viewbox  *geom.Rect
-	Attrs    AttrMap
-	Children []Node
+	nodeImpl
+	//Viewbox *geom.Rect
 }
 
 var _ Node = (*Root)(nil)
 
 func CreateRoot() Node {
-	return &Root{}
+	r := &Root{}
+	r.nodeImpl.name = "svg"
+	r.nodeImpl.onMarshalAttrs = r.marshalAttrs
+	r.nodeImpl.onUnmarshalAttrs = r.unmarshalAttrs
+	return r
 }
 
 func init() {
 	RegisterNodeCreator("svg", CreateRoot)
 }
 
-func (r *Root) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	if start.Name.Space != SvgNs || start.Name.Local != "svg" {
-		return fmt.Errorf("Unexpected element for SVG Root: %v", start.Name)
-	}
+func (r *Root) marshalAttrs(am AttrMap) {
 
-	r.Attrs = makeAttrMap(start.Attr)
-	// XML Namespaces are totally borked in encoding/xml.
-	delete(r.Attrs, "xmlns")
-
-	var err error
-	r.Children, _, err = readChildren(d, &start)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
-func (r *Root) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	se := MakeStartElement("svg", r.Attrs)
-	// XML Namespaces are totally borked in encoding/xml.
-	se.Name.Space = SvgNs
-
-	err := e.EncodeToken(se)
-	if err != nil {
-		return err
-	}
-
-	for _, c := range r.Children {
-		err = e.Encode(c)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = e.EncodeToken(se.End())
-	if err != nil {
-		return err
-	}
-
+func (r *Root) unmarshalAttrs(am AttrMap) error {
 	return nil
 }

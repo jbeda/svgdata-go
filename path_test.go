@@ -17,23 +17,25 @@ package svgdata
 import (
 	"testing"
 
+	"github.com/sanity-io/litter"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestLoadSavePath(t *testing.T) {
 	assert := assert.New(t)
+	l := litter.Options{HidePrivateFields: false}
 
 	data0 := []byte(`<svg xmlns="http://www.w3.org/2000/svg"><path d="M0,0 Z" style="color:red" ></path></svg>`)
 	r0, err := Unmarshal(data0)
 	assert.NoError(err)
 
-	data1, err := Marshal(r0)
+	data1, err := Marshal(r0, false)
 	assert.NoError(err)
 
 	r1, err := Unmarshal(data1)
 	assert.NoError(err)
 
-	assert.Equal(r0, r1)
+	assert.Equal(l.Sdump(r0), l.Sdump(r1))
 }
 
 func TestPathTokenize(t *testing.T) {
@@ -143,15 +145,15 @@ func TestPathParseSave(t *testing.T) {
 	assert.Len(sps, 1)
 	assert.Equal(SubPath{
 		Commands: []PathCommand{
-			PathCommand{'m', []float64{1, 2}, 0, 0, 1, 2},
-			PathCommand{'l', []float64{1, 2}, 1, 2, 2, 4},
-			PathCommand{'h', []float64{1}, 2, 4, 3, 4},
-			PathCommand{'v', []float64{1}, 3, 4, 3, 5},
-			PathCommand{'c', []float64{1, 2, 2, 3, 4, 5}, 3, 5, 7, 10},
-			PathCommand{'s', []float64{1, 2, 3, 4}, 7, 10, 10, 14},
-			PathCommand{'q', []float64{1, 2, 3, 4}, 10, 14, 13, 18},
-			PathCommand{'t', []float64{1, 2}, 13, 18, 14, 20},
-			PathCommand{'a', []float64{1, 2, 20, 1, 0, 3, 4}, 14, 20, 17, 24},
+			{'m', []float64{1, 2}, 0, 0, 1, 2},
+			{'l', []float64{1, 2}, 1, 2, 2, 4},
+			{'h', []float64{1}, 2, 4, 3, 4},
+			{'v', []float64{1}, 3, 4, 3, 5},
+			{'c', []float64{1, 2, 2, 3, 4, 5}, 3, 5, 7, 10},
+			{'s', []float64{1, 2, 3, 4}, 7, 10, 10, 14},
+			{'q', []float64{1, 2, 3, 4}, 10, 14, 13, 18},
+			{'t', []float64{1, 2}, 13, 18, 14, 20},
+			{'a', []float64{1, 2, 20, 1, 0, 3, 4}, 14, 20, 17, 24},
 		},
 		startX: 1, startY: 2,
 		endX: 17, endY: 24,
@@ -165,15 +167,15 @@ func TestPathParseSave(t *testing.T) {
 	assert.Len(sps, 1)
 	assert.Equal(SubPath{
 		Commands: []PathCommand{
-			PathCommand{'M', []float64{1, 2}, 0, 0, 1, 2},
-			PathCommand{'L', []float64{1, 2}, 1, 2, 1, 2},
-			PathCommand{'H', []float64{1}, 1, 2, 1, 2},
-			PathCommand{'V', []float64{1}, 1, 2, 1, 1},
-			PathCommand{'C', []float64{1, 2, 2, 3, 4, 5}, 1, 1, 4, 5},
-			PathCommand{'S', []float64{1, 2, 3, 4}, 4, 5, 3, 4},
-			PathCommand{'Q', []float64{1, 2, 3, 4}, 3, 4, 3, 4},
-			PathCommand{'T', []float64{1, 2}, 3, 4, 1, 2},
-			PathCommand{'A', []float64{1, 2, 20, 1, 0, 3, 4}, 1, 2, 3, 4},
+			{'M', []float64{1, 2}, 0, 0, 1, 2},
+			{'L', []float64{1, 2}, 1, 2, 1, 2},
+			{'H', []float64{1}, 1, 2, 1, 2},
+			{'V', []float64{1}, 1, 2, 1, 1},
+			{'C', []float64{1, 2, 2, 3, 4, 5}, 1, 1, 4, 5},
+			{'S', []float64{1, 2, 3, 4}, 4, 5, 3, 4},
+			{'Q', []float64{1, 2, 3, 4}, 3, 4, 3, 4},
+			{'T', []float64{1, 2}, 3, 4, 1, 2},
+			{'A', []float64{1, 2, 20, 1, 0, 3, 4}, 1, 2, 3, 4},
 		},
 		startX: 1, startY: 2,
 		endX: 3, endY: 4,

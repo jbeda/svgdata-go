@@ -14,16 +14,11 @@
 
 package svgdata
 
-import (
-	"encoding/xml"
-	"fmt"
-
-	"github.com/jbeda/geom"
-)
+import "github.com/jbeda/geom"
 
 // Circle is an SVG element that has no specialized code or representation.
 type Circle struct {
-	Attrs  AttrMap
+	nodeImpl
 	Center geom.Coord
 	Radius float64
 }
@@ -33,64 +28,44 @@ func init() {
 }
 
 func createCircle() Node {
-	return &Circle{}
+	c := &Circle{}
+	c.nodeImpl.name = "circle"
+	c.nodeImpl.onMarshalAttrs = c.marshalAttrs
+	c.nodeImpl.onUnmarshalAttrs = c.unmarshalAttrs
+	return c
 }
 
 func NewCircle(c geom.Coord, r float64) *Circle {
 	return &Circle{Center: c, Radius: r}
 }
 
-func (c *Circle) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	var err error
-
-	if start.Name.Space != SvgNs {
-		return fmt.Errorf("Parsing non-SVG element: %v", start.Name)
-	}
-
-	c.Attrs = makeAttrMap(start.Attr)
-
-	cx, err := parseValue(c.Attrs["cx"])
-	if err != nil {
-		return err
-	}
-	delete(c.Attrs, "cx")
-
-	cy, err := parseValue(c.Attrs["cy"])
-	if err != nil {
-		return err
-	}
-	delete(c.Attrs, "cy")
-
-	r, err := parseValue(c.Attrs["r"])
-	if err != nil {
-		return err
-	}
-	delete(c.Attrs, "r")
-
-	c.Center = geom.Coord{X: cx, Y: cy}
-	c.Radius = r
-
-	_, _, err = readChildren(d, &start)
-	return err
-}
-
-func (c *Circle) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	am := copyAttrMap(c.Attrs)
+func (c *Circle) marshalAttrs(am AttrMap) {
 	am["cx"] = floatToString(c.Center.X)
 	am["cy"] = floatToString(c.Center.Y)
 	am["r"] = floatToString(c.Radius)
+}
 
-	se := MakeStartElement("circle", am)
-
-	err := e.EncodeToken(se)
+func (c *Circle) unmarshalAttrs(am AttrMap) error {
+	cx, err := parseValue(am["cx"])
 	if err != nil {
 		return err
 	}
+	delete(am, "cx")
 
-	err = e.EncodeToken(se.End())
+	cy, err := parseValue(am["cy"])
 	if err != nil {
 		return err
 	}
+	delete(am, "cy")
+
+	r, err := parseValue(am["r"])
+	if err != nil {
+		return err
+	}
+	delete(am, "r")
+
+	c.Center = geom.Coord{X: cx, Y: cy}
+	c.Radius = r
 
 	return nil
 }

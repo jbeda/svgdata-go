@@ -16,8 +16,6 @@ package svgdata
 
 import (
 	"bytes"
-	"encoding/xml"
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,7 +24,7 @@ import (
 )
 
 type Path struct {
-	Attrs    AttrMap
+	nodeImpl
 	SubPaths []SubPath
 }
 
@@ -44,46 +42,28 @@ type PathCommand struct {
 }
 
 func init() {
-	RegisterNodeCreator("path", createPath)
+	RegisterNodeCreator("path", func() Node { return NewPath() })
 }
 
-func createPath() Node {
-	return &Path{}
+func NewPath() *Path {
+	p := &Path{}
+	p.nodeImpl.name = "path"
+	p.nodeImpl.onMarshalAttrs = p.marshalAttrs
+	p.nodeImpl.onUnmarshalAttrs = p.unmarshalAttrs
+	return p
 }
 
-func (p *Path) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	var err error
-
-	if start.Name.Space != SvgNs {
-		return fmt.Errorf("Parsing non-SVG element: %v", start.Name)
-	}
-	p.Attrs = makeAttrMap(start.Attr)
-
-	p.SubPaths, err = ParsePathString(p.Attrs["d"])
-	if err != nil {
-		return err
-	}
-	delete(p.Attrs, "d")
-
-	_, _, err = readChildren(d, &start)
-	return err
-}
-
-func (p *Path) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	am := copyAttrMap(p.Attrs)
+func (p *Path) marshalAttrs(am AttrMap) {
 	am["d"] = SavePathString(p.SubPaths)
+}
 
-	se := MakeStartElement("path", am)
-
-	err := e.EncodeToken(se)
+func (p *Path) unmarshalAttrs(am AttrMap) error {
+	var err error
+	p.SubPaths, err = ParsePathString(am["d"])
 	if err != nil {
 		return err
 	}
-
-	err = e.EncodeToken(se.End())
-	if err != nil {
-		return err
-	}
+	delete(am, "d")
 
 	return nil
 }

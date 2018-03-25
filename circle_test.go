@@ -17,21 +17,26 @@ package svgdata
 import (
 	"testing"
 
+	"github.com/sanity-io/litter"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestLoadSaveCircle(t *testing.T) {
 	assert := assert.New(t)
+	l := litter.Options{HidePrivateFields: false}
 
 	data0 := []byte(`<svg xmlns="http://www.w3.org/2000/svg"><circle cx="3px" cy="4in" r="20" ></circle></svg>`)
 	r0, err := Unmarshal(data0)
 	assert.NoError(err)
 
-	data1, err := Marshal(r0)
+	data1, err := Marshal(r0, false)
 	assert.NoError(err)
 
 	r1, err := Unmarshal(data1)
 	assert.NoError(err)
 
-	assert.Equal(r0, r1)
+	d0 := l.Sdump(r0)
+	d1 := l.Sdump(r1)
+
+	assert.Equal(d0, d1)
 }

@@ -24,10 +24,10 @@ type Circle struct {
 }
 
 func init() {
-	RegisterNodeCreator("circle", createCircle)
+	RegisterNodeCreator("circle", func() Node { return createCircle() })
 }
 
-func createCircle() Node {
+func createCircle() *Circle {
 	c := &Circle{}
 	c.nodeImpl.name = "circle"
 	c.nodeImpl.onMarshalAttrs = c.marshalAttrs
@@ -36,7 +36,10 @@ func createCircle() Node {
 }
 
 func NewCircle(c geom.Coord, r float64) *Circle {
-	return &Circle{Center: c, Radius: r}
+	n := createCircle()
+	n.Center = c
+	n.Radius = r
+	return n
 }
 
 func (c *Circle) marshalAttrs(am AttrMap) {

@@ -20,9 +20,15 @@ type Unknown struct {
 }
 
 func init() {
-	unknownCreator = createUnknown
+	unknownCreator = func() Node { return createUnknown() }
 }
 
-func createUnknown() Node {
+func createUnknown() *Unknown {
 	return &Unknown{}
+}
+
+func NewGroup() Node {
+	u := createUnknown()
+	u.name = "g"
+	return u
 }

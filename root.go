@@ -17,12 +17,11 @@ package svgdata
 // Root represents the root <svg> element.
 type Root struct {
 	nodeImpl
-	//Viewbox *geom.Rect
 }
 
 var _ Node = (*Root)(nil)
 
-func CreateRoot() Node {
+func CreateRoot() *Root {
 	r := &Root{}
 	r.nodeImpl.name = "svg"
 	r.nodeImpl.onMarshalAttrs = r.marshalAttrs
@@ -31,7 +30,7 @@ func CreateRoot() Node {
 }
 
 func init() {
-	RegisterNodeCreator("svg", CreateRoot)
+	RegisterNodeCreator("svg", func() Node { return CreateRoot() })
 }
 
 func (r *Root) marshalAttrs(am AttrMap) {

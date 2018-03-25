@@ -23,8 +23,6 @@ const (
 	SvgNs = "http://www.w3.org/2000/svg"
 )
 
-type AttrMap map[string]string
-
 type onMarshalAttrsFunc func(attr AttrMap)
 type onUnmarshalAttrsFunc func(attr AttrMap) error
 
@@ -33,8 +31,12 @@ type Node interface {
 	xml.Marshaler
 
 	Name() string
+
 	Attrs() AttrMap
+
 	Children() *[]Node
+	AddChild(n Node)
+
 	GetText() string
 	SetText(t string)
 }
@@ -59,11 +61,18 @@ func (n *nodeImpl) Name() string {
 }
 
 func (n *nodeImpl) Attrs() AttrMap {
+	if n.attrs == nil {
+		n.attrs = AttrMap{}
+	}
 	return n.attrs
 }
 
 func (n *nodeImpl) Children() *[]Node {
 	return &n.children
+}
+
+func (n *nodeImpl) AddChild(c Node) {
+	n.children = append(n.children, c)
 }
 
 func (n *nodeImpl) GetText() string {

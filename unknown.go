@@ -32,3 +32,9 @@ func NewGroup() Node {
 	u.name = "g"
 	return u
 }
+
+func NewStyle() Node {
+	u := createUnknown()
+	u.name = "style"
+	return u
+}

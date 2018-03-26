@@ -112,6 +112,11 @@ func (n *nodeImpl) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 
 	se := MakeStartElement(n.name, am)
 
+	// Do the namespace thing for the root. This is a total hack.
+	if n.name == "svg" {
+		se.Name.Space = SvgNs
+	}
+
 	err := e.EncodeToken(se)
 	if err != nil {
 		return err

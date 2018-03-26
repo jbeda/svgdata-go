@@ -43,6 +43,10 @@ func Unmarshal(data []byte) (*Root, error) {
 
 func Marshal(r *Root, pretty bool) ([]byte, error) {
 	var b bytes.Buffer
+
+	b.WriteString("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n")
+	//b.WriteString("<!-- Generator: Adobe Illustrator 22.1.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->\n")
+
 	e := xml.NewEncoder(&b)
 	if pretty {
 		e.Indent("", "  ")

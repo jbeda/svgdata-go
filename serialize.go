@@ -152,5 +152,5 @@ func copyAttrMap(am AttrMap) AttrMap {
 }
 
 func floatToString(f float64) string {
-	return strconv.FormatFloat(f, 'g', 4, 64)
+	return strconv.FormatFloat(f, 'g', -1, 64)
 }
